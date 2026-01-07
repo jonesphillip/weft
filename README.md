@@ -181,9 +181,19 @@ src/
 └── api/                  # API client
 ```
 
-## Adding New Integrations
+## Adding Tools to Your Board
 
-You can connect any [remote MCP server](https://modelcontextprotocol.io/) directly in your board settings without modifying code.
+<p align="center">
+  <img src="assets/board-settings.png" alt="Board Settings" width="400">
+</p>
+
+Each board has its own tool configuration in **Settings**:
+
+- **Anthropic API Key** - Required for agents to execute. Each board uses its own key.
+- **Connected Accounts** - OAuth integrations like Google. Connect once to enable Gmail, Docs, and Sheets tools.
+- **MCP Servers** - Add GitHub (built-in) or any [remote MCP server](https://modelcontextprotocol.io/) to give agents custom tools.
+
+## Building New Integrations
 
 To add a built-in integration, Weft uses a registry-driven architecture:
 
