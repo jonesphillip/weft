@@ -182,6 +182,27 @@ src/
 └── api/                  # API client
 ```
 
+## Scheduled Tasks
+
+Tasks can be configured to run on a schedule (daily, weekly, or cron). When a scheduled task runs, it operates differently from regular tasks:
+
+<p align="center">
+  <img src="assets/scheduled-tasks-diagram.png" alt="Scheduled Tasks" width="600">
+</p>
+
+1. A Durable Object alarm triggers at the scheduled time
+2. The parent agent runs with read-only tool access. It cannot send emails, create PRs, or modify anything directly.
+3. The parent agent calls `create_task` to fork child tasks for each piece of work it finds
+4. Each child task gets its own agent context with full tool access and runs until it needs human approval
+
+This separation means scheduled agents can analyze your inbox or repos overnight, but actual changes still require your review.
+
+| Schedule Type | Example |
+|--------------|---------|
+| Daily | 8:00 AM in your timezone |
+| Weekly | Monday and Thursday at 9:00 AM |
+| Custom | Cron expression (`0 */6 * * *`) |
+
 ## Adding Tools to Your Board
 
 <p align="center">
