@@ -8,7 +8,6 @@ interface AgentSectionProps {
   boardId: string;
   taskId: string;
   onRun: () => void;
-  disabled?: boolean;
   isRunning?: boolean;
   columns: Column[];
   scheduleConfig?: ScheduleConfig;
@@ -90,7 +89,6 @@ export function AgentSection({
   boardId,
   taskId,
   onRun,
-  disabled,
   isRunning,
   columns,
   scheduleConfig,
@@ -248,20 +246,11 @@ export function AgentSection({
           <Button
             variant="agent"
             onClick={onRun}
-            disabled={disabled || isRunning}
+            disabled={isRunning}
             className="agent-run-button"
           >
-            {isRunning ? (
-              <>
-                <span className="agent-spinner" />
-                Starting...
-              </>
-            ) : (
-              <>
-                <AgentIcon size={16} />
-                Run Now
-              </>
-            )}
+            <AgentIcon size={16} />
+            Run Now
           </Button>
 
           <button

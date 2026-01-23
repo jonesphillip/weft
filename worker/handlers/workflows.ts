@@ -65,9 +65,7 @@ export async function handleGeneratePlan(
   }
 
   // Combine task title and description for agent
-  const taskDescription = task.title && task.description
-    ? `${task.title}\n\n${task.description}`
-    : task.title || task.description || 'No task description provided';
+  const taskDescription = [task.title, task.description].filter(Boolean).join('\n\n') || 'No task description provided';
 
   // Start the agent workflow directly
   try {

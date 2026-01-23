@@ -421,8 +421,7 @@ export function TaskModal({ task, isOpen, onClose }: TaskModalProps) {
               boardId={task.boardId}
               taskId={task.id}
               onRun={handleStartAgent}
-              disabled={!description.trim()}
-              isRunning={isGeneratingPlan}
+              isRunning={isGeneratingPlan || (workflowPlan?.status !== undefined && workflowPlan.status !== 'completed' && workflowPlan.status !== 'failed')}
               columns={activeBoard.columns}
               scheduleConfig={scheduleConfig}
               onScheduleChange={handleScheduleConfigChange}
