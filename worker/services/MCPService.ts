@@ -1,5 +1,3 @@
-import { GmailMCPServer } from '../google/GmailMCP';
-import { DocsMCPServer } from '../google/DocsMCP';
 import { MCPClient, type MCPServerConfig } from '../mcp/MCPClient';
 import { jsonResponse } from '../utils/response';
 import { toCamelCase } from '../utils/transformations';
@@ -241,73 +239,61 @@ export class MCPService {
 
   /**
    * Get tools for an MCP server
+   * For hosted MCPs, always returns fresh tools from the registry (no stale cache)
+   * For external MCPs, returns cached tools
    */
-  getMCPServerTools(serverId: string): Response {
-    const tools = this.sql.exec(
-      'SELECT * FROM mcp_tool_schemas WHERE server_id = ? ORDER BY name',
-      serverId
-    ).toArray();
-
-    if (tools.length > 0) {
-      return jsonResponse({
-        success: true,
-        data: tools.map(t => this.transformTool(t as Record<string, unknown>))
-      });
-    }
-
-    // Fallback for hosted MCP servers
+  async getMCPServerTools(serverId: string): Promise<Response> {
     const server = this.sql.exec(
       'SELECT name, type FROM mcp_servers WHERE id = ?',
       serverId
     ).toArray()[0] as { name: string; type: string } | undefined;
 
-    if (server?.type === 'hosted') {
-      let hostedTools: Array<{ name: string; description?: string; inputSchema: object; approvalRequiredFields?: string[] }> = [];
+    if (!server) {
+      return jsonResponse({ success: true, data: [] });
+    }
 
-      if (server.name === 'Gmail') {
-        const gmailServer = new GmailMCPServer('');
-        hostedTools = gmailServer.getTools();
-      } else if (server.name === 'Google Docs') {
-        const docsServer = new DocsMCPServer('');
-        hostedTools = docsServer.getTools();
-      }
+    if (server.type === 'hosted') {
+      const { getAccountForMCPName, getMCPByName, getMCPTools } = await import('../mcp/AccountMCPRegistry');
 
-      if (hostedTools.length > 0) {
-        // Cache for next time
-        const now = new Date().toISOString();
-        for (const tool of hostedTools) {
-          const id = this.generateId();
-          this.sql.exec(
-            `INSERT INTO mcp_tool_schemas (id, server_id, name, description, input_schema, approval_required_fields, cached_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            id,
-            serverId,
-            tool.name,
-            tool.description || null,
-            JSON.stringify(tool.inputSchema),
-            tool.approvalRequiredFields ? JSON.stringify(tool.approvalRequiredFields) : null,
-            now
-          );
-        }
+      const account = getAccountForMCPName(server.name);
+      const mcp = getMCPByName(server.name);
 
-        return jsonResponse({ success: true, data: hostedTools });
+      if (account && mcp) {
+        const tools = getMCPTools(account.id, mcp.id);
+        return jsonResponse({
+          success: true,
+          data: tools.map(t => ({
+            name: t.name,
+            description: t.description,
+            inputSchema: t.inputSchema,
+            approvalRequiredFields: t.approvalRequiredFields,
+          }))
+        });
       }
     }
 
-    return jsonResponse({ success: true, data: [] });
+    const tools = this.sql.exec(
+      'SELECT * FROM mcp_tool_schemas WHERE server_id = ? ORDER BY name',
+      serverId
+    ).toArray();
+
+    return jsonResponse({
+      success: true,
+      data: tools.map(t => this.transformTool(t as Record<string, unknown>))
+    });
   }
 
   /**
    * Cache tools for an MCP server
    */
-  cacheMCPServerTools(serverId: string, data: {
+  async cacheMCPServerTools(serverId: string, data: {
     tools: Array<{
       name: string;
       description?: string;
       inputSchema: object;
       approvalRequiredFields?: string[];
     }>;
-  }): Response {
+  }): Promise<Response> {
     const now = new Date().toISOString();
 
     this.sql.exec('DELETE FROM mcp_tool_schemas WHERE server_id = ?', serverId);
@@ -327,7 +313,7 @@ export class MCPService {
       );
     }
 
-    return this.getMCPServerTools(serverId);
+    return await this.getMCPServerTools(serverId);
   }
 
   // ============================================

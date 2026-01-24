@@ -12,6 +12,28 @@ import { githubTools } from './githubTools';
 const GITHUB_API_BASE = 'https://api.github.com';
 const DEFAULT_BRANCH = 'main';
 
+// Backwards compatibility: map old snake_case tool names to camelCase
+const LEGACY_TOOL_NAMES: Record<string, string> = {
+  'read_file': 'readFile',
+  'create_branch': 'createBranch',
+  'create_pr': 'createPullRequest',
+  'create_pull_request': 'createPullRequest',
+  'list_issues': 'listIssues',
+  'list_pull_requests': 'listPullRequests',
+  'list_repos': 'listRepositories',
+  'get_issue': 'getIssue',
+  'get_pull_request': 'getPullRequest',
+  'get_repository': 'getRepository',
+  'list_repositories': 'listRepositories',
+};
+
+// Backwards compatibility: map old snake_case arg names to camelCase
+const LEGACY_ARG_NAMES: Record<string, string> = {
+  'pull_number': 'pullNumber',
+  'issue_number': 'issueNumber',
+  'per_page': 'perPage',
+};
+
 export class GitHubMCPServer extends HostedMCPServer {
   readonly name = 'GitHub';
   readonly description = 'Read-only access to repositories, issues, and pull requests. Use Sandbox for code changes.';
@@ -28,24 +50,35 @@ export class GitHubMCPServer extends HostedMCPServer {
   }
 
   async callTool(name: string, args: Record<string, unknown>): Promise<MCPToolCallResult> {
+    const normalizedName = LEGACY_TOOL_NAMES[name] || name;
+    const normalizedArgs = { ...args };
+    for (const [oldKey, newKey] of Object.entries(LEGACY_ARG_NAMES)) {
+      if (oldKey in normalizedArgs) {
+        normalizedArgs[newKey] = normalizedArgs[oldKey];
+        delete normalizedArgs[oldKey];
+      }
+    }
+
     try {
-      switch (name) {
-        case 'read_file':
-          return await this.readFile(args);
-        case 'create_branch':
-          return await this.createBranch(args);
-        case 'create_pr':
-          return await this.createPR(args);
-        case 'list_issues':
-          return await this.listIssues(args);
-        case 'get_issue':
-          return await this.getIssue(args);
-        case 'get_pull_request':
-          return await this.getPullRequest(args);
-        case 'get_repository':
-          return await this.getRepository(args);
-        case 'list_repos':
-          return await this.listRepos(args);
+      switch (normalizedName) {
+        case 'readFile':
+          return await this.readFile(normalizedArgs);
+        case 'createBranch':
+          return await this.createBranch(normalizedArgs);
+        case 'createPullRequest':
+          return await this.createPullRequest(normalizedArgs);
+        case 'listIssues':
+          return await this.listIssues(normalizedArgs);
+        case 'listPullRequests':
+          return await this.listPullRequests(normalizedArgs);
+        case 'getIssue':
+          return await this.getIssue(normalizedArgs);
+        case 'getPullRequest':
+          return await this.getPullRequest(normalizedArgs);
+        case 'getRepository':
+          return await this.getRepository(normalizedArgs);
+        case 'listRepositories':
+          return await this.listRepositories(normalizedArgs);
         default:
           return this.errorContent(`Unknown tool: ${name}`);
       }
@@ -59,7 +92,7 @@ export class GitHubMCPServer extends HostedMCPServer {
   // ============================================================================
 
   private async readFile(args: Record<string, unknown>): Promise<MCPToolCallResult> {
-    const { owner, repo, path, ref = DEFAULT_BRANCH } = parseToolArgs(githubTools.read_file.input, args);
+    const { owner, repo, path, ref = DEFAULT_BRANCH } = parseToolArgs(githubTools.readFile.input, args);
 
     const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/contents/${path}?ref=${ref}`;
     const response = await this.githubFetch(url);
@@ -88,7 +121,7 @@ export class GitHubMCPServer extends HostedMCPServer {
   }
 
   private async createBranch(args: Record<string, unknown>): Promise<MCPToolCallResult> {
-    const { owner, repo, branch, from = DEFAULT_BRANCH } = parseToolArgs(githubTools.create_branch.input, args);
+    const { owner, repo, branch, from = DEFAULT_BRANCH } = parseToolArgs(githubTools.createBranch.input, args);
 
     // First, get the SHA of the source branch
     const refUrl = `${GITHUB_API_BASE}/repos/${owner}/${repo}/git/ref/heads/${from}`;
@@ -123,8 +156,8 @@ export class GitHubMCPServer extends HostedMCPServer {
     };
   }
 
-  private async createPR(args: Record<string, unknown>): Promise<MCPToolCallResult> {
-    const { owner, repo, title, body = '', head, base = DEFAULT_BRANCH } = parseToolArgs(githubTools.create_pr.input, args);
+  private async createPullRequest(args: Record<string, unknown>): Promise<MCPToolCallResult> {
+    const { owner, repo, title, body = '', head, base = DEFAULT_BRANCH } = parseToolArgs(githubTools.createPullRequest.input, args);
 
     const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/pulls`;
     const response = await this.githubFetch(url, {
@@ -158,28 +191,39 @@ export class GitHubMCPServer extends HostedMCPServer {
   }
 
   private async listIssues(args: Record<string, unknown>): Promise<MCPToolCallResult> {
-    const { owner, repo, state = 'open', labels, per_page: perPage = 30 } = parseToolArgs(githubTools.list_issues.input, args);
+    const { owner, repo, state = 'open', labels, since, perPage = 30 } = parseToolArgs(githubTools.listIssues.input, args);
+
+    const queryParts = [`repo:${owner}/${repo}`, 'is:issue'];
+    if (state !== 'all') {
+      queryParts.push(`state:${state}`);
+    }
+    if (labels) {
+      for (const label of labels.split(',')) {
+        queryParts.push(`label:${label.trim()}`);
+      }
+    }
+    if (since) {
+      queryParts.push(`created:>=${since}`);
+    }
 
     const params = new URLSearchParams({
-      state,
+      q: queryParts.join(' '),
       per_page: String(perPage),
     });
 
-    if (labels) {
-      params.set('labels', labels);
-    }
-
-    const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/issues?${params.toString()}`;
+    const url = `${GITHUB_API_BASE}/search/issues?${params.toString()}`;
     const response = await this.githubFetch(url);
-    const data = await response.json() as Array<{
-      number: number;
-      title: string;
-      state: string;
-      html_url: string;
-      labels: Array<{ name: string; color: string }>;
-    }>;
+    const data = await response.json() as {
+      items: Array<{
+        number: number;
+        title: string;
+        state: string;
+        html_url: string;
+        labels: Array<{ name: string; color: string }>;
+      }>;
+    };
 
-    const result = data.map((issue) => ({
+    const result = data.items.map((issue) => ({
       number: issue.number,
       title: issue.title,
       state: issue.state,
@@ -193,10 +237,50 @@ export class GitHubMCPServer extends HostedMCPServer {
     };
   }
 
-  private async getIssue(args: Record<string, unknown>): Promise<MCPToolCallResult> {
-    const { owner, repo, issue_number } = parseToolArgs(githubTools.get_issue.input, args);
+  private async listPullRequests(args: Record<string, unknown>): Promise<MCPToolCallResult> {
+    const { owner, repo, state = 'open', since, perPage = 30 } = parseToolArgs(githubTools.listPullRequests.input, args);
 
-    const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/issues/${issue_number}`;
+    const queryParts = [`repo:${owner}/${repo}`, 'is:pr'];
+    if (state !== 'all') {
+      queryParts.push(`state:${state}`);
+    }
+    if (since) {
+      queryParts.push(`created:>=${since}`);
+    }
+
+    const params = new URLSearchParams({
+      q: queryParts.join(' '),
+      per_page: String(perPage),
+    });
+
+    const url = `${GITHUB_API_BASE}/search/issues?${params.toString()}`;
+    const response = await this.githubFetch(url);
+    const data = await response.json() as {
+      items: Array<{
+        number: number;
+        title: string;
+        state: string;
+        html_url: string;
+      }>;
+    };
+
+    const result = data.items.map((pr) => ({
+      number: pr.number,
+      title: pr.title,
+      state: pr.state,
+      url: pr.html_url,
+    }));
+
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
+    };
+  }
+
+  private async getIssue(args: Record<string, unknown>): Promise<MCPToolCallResult> {
+    const { owner, repo, issueNumber } = parseToolArgs(githubTools.getIssue.input, args);
+
+    const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/issues/${issueNumber}`;
     const response = await this.githubFetch(url);
     const data = await response.json() as {
       number: number;
@@ -221,9 +305,9 @@ export class GitHubMCPServer extends HostedMCPServer {
   }
 
   private async getPullRequest(args: Record<string, unknown>): Promise<MCPToolCallResult> {
-    const { owner, repo, pull_number } = parseToolArgs(githubTools.get_pull_request.input, args);
+    const { owner, repo, pullNumber } = parseToolArgs(githubTools.getPullRequest.input, args);
 
-    const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/pulls/${pull_number}`;
+    const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/pulls/${pullNumber}`;
     const response = await this.githubFetch(url);
     const data = await response.json() as {
       number: number;
@@ -248,7 +332,7 @@ export class GitHubMCPServer extends HostedMCPServer {
   }
 
   private async getRepository(args: Record<string, unknown>): Promise<MCPToolCallResult> {
-    const { owner, repo } = parseToolArgs(githubTools.get_repository.input, args);
+    const { owner, repo } = parseToolArgs(githubTools.getRepository.input, args);
 
     const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}`;
     const response = await this.githubFetch(url);
@@ -284,8 +368,8 @@ export class GitHubMCPServer extends HostedMCPServer {
     };
   }
 
-  private async listRepos(args: Record<string, unknown>): Promise<MCPToolCallResult> {
-    const { type = 'all', sort = 'full_name', per_page: perPage = 30 } = parseToolArgs(githubTools.list_repos.input, args);
+  private async listRepositories(args: Record<string, unknown>): Promise<MCPToolCallResult> {
+    const { type = 'all', sort = 'full_name', perPage = 30 } = parseToolArgs(githubTools.listRepositories.input, args);
 
     const params = new URLSearchParams({
       type,

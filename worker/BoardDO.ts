@@ -744,7 +744,7 @@ export class BoardDO extends DurableObject<Env> {
   }
 
   async getMCPServerTools(serverId: string): Promise<MCPTool[]> {
-    const response = this.mcpService.getMCPServerTools(serverId);
+    const response = await this.mcpService.getMCPServerTools(serverId);
     return this.extractData(response);
   }
 
@@ -756,7 +756,7 @@ export class BoardDO extends DurableObject<Env> {
       approvalRequiredFields?: string[];
     }>;
   }): Promise<MCPTool[]> {
-    const response = this.mcpService.cacheMCPServerTools(serverId, data);
+    const response = await this.mcpService.cacheMCPServerTools(serverId, data);
     return this.extractData(response);
   }
 

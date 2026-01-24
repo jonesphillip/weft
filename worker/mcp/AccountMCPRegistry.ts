@@ -308,9 +308,9 @@ For creating PRs with code changes, use Sandbox to make the changes first.
 
 **Reading repository info:**
 \`\`\`
-GitHub__get_repository({ owner: "...", repo: "..." })
-GitHub__list_issues({ owner: "...", repo: "...", state: "open" })
-GitHub__get_pull_request({ owner: "...", repo: "...", pull_number: 123 })
+GitHub__getRepository({ owner: "...", repo: "..." })
+GitHub__listIssues({ owner: "...", repo: "...", state: "open" })
+GitHub__getPullRequest({ owner: "...", repo: "...", pullNumber: 123 })
 \`\`\``;
 
 // ============================================================================
@@ -412,18 +412,18 @@ export const ACCOUNT_REGISTRY: AccountDefinition[] = [
           {
             pattern: 'github\\.com/([^/]+)/([^/]+)/pull/(\\d+)',
             type: 'github_pr',
-            fetchTool: 'get_pull_request',
+            fetchTool: 'getPullRequest',
           },
           {
             pattern: 'github\\.com/([^/]+)/([^/]+)/issues/(\\d+)',
             type: 'github_issue',
-            fetchTool: 'get_issue',
+            fetchTool: 'getIssue',
           },
           {
             // Match repo URLs but exclude PR/issue/blob/tree paths
             pattern: 'github\\.com/([^/]+)/([^/]+)/?$',
             type: 'github_repo',
-            fetchTool: 'get_repository',
+            fetchTool: 'getRepository',
           },
         ],
         workflowGuidance: GITHUB_GUIDANCE,

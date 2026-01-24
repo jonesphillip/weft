@@ -519,7 +519,8 @@ export function TaskModal({ task, isOpen, onClose }: TaskModalProps) {
 
   // Use full width for approval views with rich content (PR diffs, Google Docs, Sheets, Emails)
   const FULL_WIDTH_TOOLS = [
-    'GitHub__create_pr',
+    'GitHub__createPullRequest',
+    'GitHub__create_pr', // legacy compat
     'Sandbox__createPullRequest',
     'Google_Docs__createDocument',
     'Google_Docs__appendToDocument',

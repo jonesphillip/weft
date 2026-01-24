@@ -30,7 +30,8 @@ type ApprovalViewComponent = React.FC<ApprovalViewProps>;
  * Registry mapping tool names to their approval view components
  */
 const APPROVAL_VIEW_REGISTRY: Record<string, ApprovalViewComponent> = {
-  'GitHub__create_pr': GitHubPRApproval,
+  'GitHub__createPullRequest': GitHubPRApproval,
+  'GitHub__create_pr': GitHubPRApproval, // legacy compat
   'Sandbox__createPullRequest': GitHubPRApproval,
   'Gmail__sendEmail': EmailApproval,
   'Gmail__createDraft': EmailApproval,

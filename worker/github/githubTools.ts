@@ -3,8 +3,6 @@
  *
  * Single source of truth for GitHub tool schemas using Zod.
  * Used for both JSON Schema generation (getTools) and runtime validation (callTool).
- *
- * Note: Tool names use snake_case to match GitHub API conventions
  */
 
 import { z } from 'zod';
@@ -83,7 +81,7 @@ const repoListItemOutput = z.object({
 // ============================================================================
 
 export const githubTools = defineTools({
-  read_file: {
+  readFile: {
     description: 'Read the contents of a file from a GitHub repository',
     input: z.object({
       owner: commonSchemas.owner,
@@ -95,7 +93,7 @@ export const githubTools = defineTools({
     output: fileContentOutput,
   },
 
-  create_branch: {
+  createBranch: {
     description: 'Create a new branch in a GitHub repository',
     input: z.object({
       owner: commonSchemas.owner,
@@ -107,7 +105,7 @@ export const githubTools = defineTools({
     output: branchOutput,
   },
 
-  create_pr: {
+  createPullRequest: {
     description: 'Create a pull request in a GitHub repository',
     input: z.object({
       owner: commonSchemas.owner,
@@ -123,8 +121,8 @@ export const githubTools = defineTools({
     approvalRequiredFields: ['owner', 'repo', 'title', 'body', 'diff'],
   },
 
-  list_issues: {
-    description: 'List issues in a GitHub repository',
+  listIssues: {
+    description: 'List issues (not pull requests) in a GitHub repository',
     input: z.object({
       owner: commonSchemas.owner,
       repo: commonSchemas.repo,
@@ -132,35 +130,52 @@ export const githubTools = defineTools({
         .describe('Filter by issue state (default: open)'),
       labels: z.string().max(500).optional()
         .describe('Comma-separated list of label names'),
-      per_page: z.coerce.number().int().min(1).max(100).default(30)
+      since: z.string().optional()
+        .describe('Only issues created after this date (ISO 8601 format, e.g., 2025-01-16)'),
+      perPage: z.coerce.number().int().min(1).max(100).default(30)
         .describe('Number of results per page (default: 30, max: 100)'),
     }),
     output: z.array(issueOutput),
   },
 
-  get_issue: {
+  listPullRequests: {
+    description: 'List pull requests in a GitHub repository',
+    input: z.object({
+      owner: commonSchemas.owner,
+      repo: commonSchemas.repo,
+      state: z.enum(['open', 'closed', 'all']).default('open')
+        .describe('Filter by PR state (default: open)'),
+      since: z.string().optional()
+        .describe('Only PRs created after this date (ISO 8601 format, e.g., 2025-01-16)'),
+      perPage: z.coerce.number().int().min(1).max(100).default(30)
+        .describe('Number of results per page (default: 30, max: 100)'),
+    }),
+    output: z.array(pullRequestOutput),
+  },
+
+  getIssue: {
     description: 'Get details of a specific issue by number',
     input: z.object({
       owner: commonSchemas.owner,
       repo: commonSchemas.repo,
-      issue_number: z.coerce.number().int().positive()
+      issueNumber: z.coerce.number().int().positive()
         .describe('Issue number'),
     }),
     output: issueDetailOutput,
   },
 
-  get_pull_request: {
+  getPullRequest: {
     description: 'Get details of a specific pull request by number',
     input: z.object({
       owner: commonSchemas.owner,
       repo: commonSchemas.repo,
-      pull_number: z.coerce.number().int().positive()
+      pullNumber: z.coerce.number().int().positive()
         .describe('Pull request number'),
     }),
     output: prDetailOutput,
   },
 
-  get_repository: {
+  getRepository: {
     description: 'Get details of a specific repository',
     input: z.object({
       owner: commonSchemas.owner,
@@ -169,14 +184,14 @@ export const githubTools = defineTools({
     output: repoOutput,
   },
 
-  list_repos: {
+  listRepositories: {
     description: 'List repositories accessible to the authenticated user. Call this first to discover available repositories before using other tools.',
     input: z.object({
       type: z.enum(['all', 'owner', 'public', 'private', 'member']).default('all')
         .describe('Filter by repo type (default: all)'),
       sort: z.enum(['created', 'updated', 'pushed', 'full_name']).default('full_name')
         .describe('Sort field (default: full_name)'),
-      per_page: z.coerce.number().int().min(1).max(100).default(30)
+      perPage: z.coerce.number().int().min(1).max(100).default(30)
         .describe('Number of results per page (default: 30, max: 100)'),
     }),
     output: z.array(repoListItemOutput),

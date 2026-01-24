@@ -523,7 +523,7 @@ export class BoardService {
         const [, owner, repo, prNumber] = match;
         const { GitHubMCPServer } = await import('../github/GitHubMCP');
         const mcp = new GitHubMCPServer(accessToken);
-        const result = await mcp.callTool(fetchTool, { owner, repo, pull_number: parseInt(prNumber, 10) });
+        const result = await mcp.callTool(fetchTool, { owner, repo, pullNumber: parseInt(prNumber, 10) });
         const data = result?.structuredContent as { title?: string } | undefined;
         if (data?.title) {
           return { type: 'github_pr', title: data.title, id: `${owner}/${repo}#${prNumber}` };
@@ -534,7 +534,7 @@ export class BoardService {
         const [, owner, repo, issueNumber] = match;
         const { GitHubMCPServer } = await import('../github/GitHubMCP');
         const mcp = new GitHubMCPServer(accessToken);
-        const result = await mcp.callTool(fetchTool, { owner, repo, issue_number: parseInt(issueNumber, 10) });
+        const result = await mcp.callTool(fetchTool, { owner, repo, issueNumber: parseInt(issueNumber, 10) });
         const data = result?.structuredContent as { title?: string } | undefined;
         if (data?.title) {
           return { type: 'github_issue', title: data.title, id: `${owner}/${repo}#${issueNumber}` };

@@ -1016,7 +1016,7 @@ export class AgentWorkflow extends WorkflowEntrypoint<WorkflowEnv, AgentWorkflow
               properties: {
                 action: {
                   type: 'string',
-                  description: 'What the child should do (e.g., "send_email", "create_pr", "review_and_merge")',
+                  description: 'What the child should do (e.g., "sendEmail", "createPullRequest", "reviewAndMerge")',
                 },
                 owner: {
                   type: 'string',
