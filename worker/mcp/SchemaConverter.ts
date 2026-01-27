@@ -279,7 +279,6 @@ declare const Sandbox: {
   push(params: {
     sessionId: string;
     branch?: string;
-    force?: boolean;
   }): Promise<MCPToolResult<PushResult>>;
 
   /** Read a file from the sandbox */

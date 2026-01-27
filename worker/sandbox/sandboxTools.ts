@@ -44,6 +44,7 @@ const commitOutput = z.object({
 const pushOutput = z.object({
   success: z.boolean().describe('Whether push succeeded'),
   ref: z.string().optional().describe('Git ref that was pushed'),
+  usedFork: z.boolean().optional().describe('Whether a fork was used due to permission error'),
 });
 
 const createPullRequestOutput = z.object({
@@ -51,6 +52,7 @@ const createPullRequestOutput = z.object({
   prNumber: z.number().optional().describe('Pull request number'),
   prUrl: z.string().optional().describe('URL to the pull request'),
   commitHash: z.string().optional().describe('Commit hash'),
+  usedFork: z.boolean().optional().describe('Whether PR was created from a fork'),
 });
 
 const readFileOutput = z.object({
@@ -137,8 +139,6 @@ export const sandboxTools = defineTools({
         .describe('Remote name (default: origin)'),
       branch: z.string().max(200).optional()
         .describe('Branch name to push'),
-      force: z.boolean().default(false)
-        .describe('Force push (default: false)'),
     }),
     output: pushOutput,
     hidden: true, // Internal only - agents should use createPullRequest

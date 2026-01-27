@@ -1180,7 +1180,8 @@ weft_create_task({
 
 **Rules:**
 - DO NOT execute actions directly (no PRs, emails, document edits)
-- Use \`weft_create_task\` for each piece of work - child tasks have full tool access and approval workflows
+- ALWAYS use \`weft_create_task\` for each piece of work found, even if there's only one item
+- Child tasks have their own agent with full tool access and approval workflows
 ${timeContextSection}
 ## Available Tools
 ${toolsList}

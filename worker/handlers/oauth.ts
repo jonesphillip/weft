@@ -13,10 +13,11 @@ import {
   exchangeCodeForToken as exchangeGoogleCode,
   getUserInfo as getGoogleUser,
 } from '../google/oauth';
-import { getAccountByCredentialType, getMCPTools, getMCPDefinition } from '../mcp/AccountMCPRegistry';
+import { getAccountByCredentialType, getMCPTools } from '../mcp/AccountMCPRegistry';
 import { encodeOAuthState, decodeOAuthState } from '../utils/oauth-state';
 import { jsonResponse } from '../utils/response';
 import { CREDENTIAL_TYPES } from '../constants';
+import { logger } from '../utils/logger';
 import type { BoardDO } from '../BoardDO';
 
 type BoardDOStub = DurableObjectStub<BoardDO>;
@@ -211,50 +212,79 @@ async function storeCredentialAndCreateMCPs(
   const stub = env.BOARD_DO.get(doId) as BoardDOStub;
 
   const credentialData = provider.buildCredential(user, tokenData);
-  const credential = await stub.createCredential(boardId, {
-    type: provider.credentialType,
-    name: credentialData.name,
-    value: tokenData.access_token,
-    metadata: credentialData.metadata,
-  });
 
-  if (!credential.id) return;
+  // Check if credential already exists (re-authentication case)
+  const existingCredentialId = await stub.findCredentialId(boardId, provider.credentialType);
 
-  // Create MCP servers based on the account registry
-  const account = getAccountByCredentialType(provider.credentialType);
-  if (account) {
-    // Use registry-based MCP creation (Google style - multiple MCPs per account)
-    for (const mcpDef of account.mcps) {
-      const mcpServer = await stub.createMCPServer(boardId, {
-        name: mcpDef.name,
-        type: 'hosted',
-        authType: 'oauth',
-        credentialId: credential.id,
-        status: 'connected',
-        urlPatterns: mcpDef.urlPatterns,
-      });
-
-      if (mcpServer.id) {
-        const mcpServerInstance = mcpDef.factory({});
-        const tools = mcpServerInstance.getTools();
-        await stub.cacheMCPServerTools(mcpServer.id, { tools });
-      }
-    }
-  } else if (provider.name === 'github') {
-    // Fallback for GitHub if not in registry
-    const githubMcpDef = getMCPDefinition('github', 'github');
-    const mcpServer = await stub.createMCPServer(boardId, {
-      name: 'GitHub',
-      type: 'hosted',
-      authType: 'oauth',
-      credentialId: credential.id,
-      status: 'connected',
-      urlPatterns: githubMcpDef?.urlPatterns,
+  if (existingCredentialId) {
+    await stub.updateCredentialValue(
+      boardId,
+      provider.credentialType,
+      tokenData.access_token,
+      credentialData.metadata
+    );
+  } else {
+    const credential = await stub.createCredential(boardId, {
+      type: provider.credentialType,
+      name: credentialData.name,
+      value: tokenData.access_token,
+      metadata: credentialData.metadata,
     });
 
-    if (mcpServer.id) {
-      const githubTools = getMCPTools('github', 'github');
-      await stub.cacheMCPServerTools(mcpServer.id, { tools: githubTools });
+    if (!credential.id) return;
+  }
+
+  // Always ensure MCP servers exist (handles both new and re-auth cases)
+  await ensureMCPServersExist(stub, boardId, provider);
+}
+
+/**
+ * Ensure MCP servers exist for the account (handles both new and re-auth cases)
+ * If MCPs already exist, this is a no-op. If not, creates them.
+ */
+async function ensureMCPServersExist(
+  stub: BoardDOStub,
+  boardId: string,
+  provider: OAuthProvider
+): Promise<void> {
+  const account = getAccountByCredentialType(provider.credentialType);
+  if (!account) {
+    logger.auth.warn('No account found for credential type', { credentialType: provider.credentialType });
+    return;
+  }
+
+  const existingServers = await stub.getMCPServers(boardId);
+  const existingMcpIds = new Set(
+    existingServers
+      .filter(s => s.name && account.mcps.some(m => m.name === s.name))
+      .map(s => s.name)
+  );
+
+  for (const mcp of account.mcps) {
+    if (existingMcpIds.has(mcp.name)) {
+      logger.auth.debug('MCP already exists', { mcpName: mcp.name, boardId });
+      continue;
+    }
+
+    try {
+      const server = await stub.createAccountMCP(boardId, {
+        accountId: account.id,
+        mcpId: mcp.id,
+      });
+
+      const tools = getMCPTools(account.id, mcp.id);
+      if (tools.length > 0 && server.id) {
+        await stub.cacheMCPServerTools(server.id, { tools });
+      }
+
+      logger.auth.info('Created MCP server', { mcpName: mcp.name, mcpId: mcp.id, boardId });
+    } catch (error) {
+      logger.auth.warn('Failed to create MCP server', {
+        mcpName: mcp.name,
+        mcpId: mcp.id,
+        boardId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 }

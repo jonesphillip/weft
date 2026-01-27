@@ -601,6 +601,10 @@ export class BoardDO extends DurableObject<Env> {
     return result.success ? result.data! : null;
   }
 
+  findCredentialId(boardId: string, type: string): string | undefined {
+    return this.credentialService.findCredentialId(boardId, type);
+  }
+
   // ============================================
   // WORKFLOW PLAN RPC METHODS
   // ============================================

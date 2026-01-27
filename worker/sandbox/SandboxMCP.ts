@@ -28,11 +28,19 @@ interface SandboxCredentials {
   anthropicApiKey?: string;
 }
 
+interface ForkInfo {
+  forkOwner: string;
+  forkRepo: string;
+  upstreamOwner: string;
+  upstreamRepo: string;
+}
+
 interface SessionInfo {
   sandboxId: string;
   workDir: string;
   repoUrl?: string;
   branch?: string;
+  forkInfo?: ForkInfo;
 }
 
 // Session cache - keyed by sessionId
@@ -64,6 +72,16 @@ export class SandboxMCPServer extends HostedMCPServer {
 
   private sandboxBinding: DurableObjectNamespace<Sandbox>;
   private credentials: SandboxCredentials;
+
+  private get githubHeaders(): Record<string, string> {
+    return {
+      'Authorization': `Bearer ${this.credentials.githubToken}`,
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'Weft-Sandbox',
+    };
+  }
 
   constructor(
     sandboxBinding: DurableObjectNamespace<Sandbox>,
@@ -139,8 +157,8 @@ export class SandboxMCPServer extends HostedMCPServer {
     await sandbox.mkdir('/workspace', { recursive: true });
 
     if (args.repoUrl) {
-      // Inject GitHub token into URL
       let cloneUrl = args.repoUrl;
+
       if (this.credentials.githubToken && cloneUrl.startsWith('https://')) {
         cloneUrl = cloneUrl.replace('https://', `https://${this.credentials.githubToken}@`);
       }
@@ -166,7 +184,7 @@ export class SandboxMCPServer extends HostedMCPServer {
       const setupStream = await sandbox.execStream(
         `cd ${workDir} && ` +
         `git config user.email "weft-workflow@example.com" && ` +
-        `git config user.name "Weft Workflow"`
+        `git config user.name "Weft"`
       );
 
       for await (const event of parseSSEStream<ExecEvent>(setupStream)) {
@@ -193,6 +211,80 @@ export class SandboxMCPServer extends HostedMCPServer {
         branch,
       },
     };
+  }
+
+  // ============================================
+  // GitHub Fork Helpers
+  // ============================================
+
+  /**
+   * Parse GitHub URL to extract owner and repo
+   */
+  private parseGitHubUrl(url: string): { owner: string; repo: string } | null {
+    // Supports: https://github.com/owner/repo.git or https://github.com/owner/repo
+    // Also handles token-injected URLs: https://token@github.com/owner/repo.git
+    const match = url.match(/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/);
+    if (!match) return null;
+    return { owner: match[1], repo: match[2] };
+  }
+
+  /**
+   * Create a fork of a repository or get existing fork
+   * Returns the fork owner (the authenticated user's login)
+   */
+  private async createOrGetFork(owner: string, repo: string): Promise<{ forkOwner: string; forkRepo: string }> {
+    const userResponse = await fetch('https://api.github.com/user', {
+      headers: this.githubHeaders,
+    });
+
+    if (!userResponse.ok) {
+      throw new Error(`Failed to get user info: ${userResponse.status}`);
+    }
+
+    const userData = await userResponse.json() as { login: string };
+    const userLogin = userData.login;
+
+    const forkResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/forks`, {
+      method: 'POST',
+      headers: this.githubHeaders,
+      body: JSON.stringify({}),
+    });
+
+    if (forkResponse.status === 202) {
+      // Fork created successfully (202 Accepted)
+      const forkData = await forkResponse.json() as { owner: { login: string }; name: string };
+      return { forkOwner: forkData.owner.login, forkRepo: forkData.name };
+    } else if (forkResponse.status === 422) {
+      // Fork already exists - use the user's login
+      logger.sandbox.info('Fork already exists, using existing fork', { owner, repo, userLogin });
+      return { forkOwner: userLogin, forkRepo: repo };
+    } else {
+      const errorText = await forkResponse.text();
+      throw new Error(`Failed to create fork: ${forkResponse.status} ${errorText}`);
+    }
+  }
+
+  /**
+   * Wait for a fork to be ready (GitHub forks are created asynchronously)
+   */
+  private async waitForForkReady(forkOwner: string, forkRepo: string, maxWaitMs: number = 30000): Promise<void> {
+    const startTime = Date.now();
+    const pollInterval = 2000;
+
+    while (Date.now() - startTime < maxWaitMs) {
+      const response = await fetch(`https://api.github.com/repos/${forkOwner}/${forkRepo}`, {
+        headers: this.githubHeaders,
+      });
+
+      if (response.ok) {
+        logger.sandbox.info('Fork is ready', { forkOwner, forkRepo });
+        return;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    throw new Error(`Fork ${forkOwner}/${forkRepo} not ready after ${maxWaitMs}ms`);
   }
 
   private async runClaude(args: {
@@ -451,7 +543,6 @@ echo "---CLAUDE_EXIT_CODE:$?---" >> /tmp/claude-output.txt
     sessionId: string;
     remote: string;
     branch?: string;
-    force: boolean;
   }): Promise<MCPToolCallResult> {
     const session = sessionCache.get(args.sessionId);
     if (!session) {
@@ -461,35 +552,129 @@ echo "---CLAUDE_EXIT_CODE:$?---" >> /tmp/claude-output.txt
     const sandbox = getSandbox(this.sandboxBinding, session.sandboxId);
     const remote = args.remote;
     const branch = args.branch || session.branch || 'main';
-    const forceFlag = args.force ? ' --force' : '';
 
+    const result = await this.pushWithForkFallback(session, sandbox, remote, branch);
+
+    if (!result.success) {
+      return this.errorContent(`Push failed: ${result.error}`);
+    }
+
+    const forkNote = result.usedFork ? ' (via fork)' : '';
+    return {
+      content: [{ type: 'text', text: `Pushed to ${remote}/${branch}${forkNote}` }],
+      structuredContent: {
+        success: true,
+        ref: `${remote}/${branch}`,
+        usedFork: result.usedFork,
+      },
+    };
+  }
+
+  /**
+   * Push with automatic fork fallback if push fails due to permissions
+   */
+  private async pushWithForkFallback(
+    session: SessionInfo,
+    sandbox: ReturnType<typeof getSandbox>,
+    remote: string,
+    branch: string
+  ): Promise<{ success: boolean; error?: string; usedFork?: boolean }> {
     const pushStream = await sandbox.execStream(
-      `cd ${session.workDir} && git push${forceFlag} ${remote} HEAD:${branch}`
+      `cd ${session.workDir} && git push ${remote} HEAD:${branch}`
     );
 
     let pushOutput = '';
-    let exitCode = 0;
+    let pushExitCode = 0;
     for await (const event of parseSSEStream<ExecEvent>(pushStream)) {
       if (event.type === 'stdout' || event.type === 'stderr') {
         pushOutput += event.data || '';
       }
       if (event.type === 'complete') {
-        exitCode = event.exitCode || 0;
+        pushExitCode = event.exitCode || 0;
         break;
       }
     }
 
-    if (exitCode !== 0) {
-      return this.errorContent(`Push failed: ${pushOutput}`);
+    if (pushExitCode === 0) {
+      return { success: true };
     }
 
-    return {
-      content: [{ type: 'text', text: `Pushed to ${remote}/${branch}` }],
-      structuredContent: {
-        success: true,
-        ref: `${remote}/${branch}`,
-      },
-    };
+    // Check if it's a permission error that we can recover from via forking
+    const isPermissionError =
+      pushOutput.includes('Permission denied') ||
+      pushOutput.includes('permission denied') ||
+      pushOutput.includes('403') ||
+      pushOutput.includes('unable to access') ||
+      pushOutput.includes('Authentication failed') ||
+      pushOutput.includes('could not read Username');
+
+    if (!isPermissionError || !session.repoUrl || !this.credentials.githubToken) {
+      return { success: false, error: pushOutput };
+    }
+
+    const repoInfo = this.parseGitHubUrl(session.repoUrl);
+    if (!repoInfo) {
+      return { success: false, error: `${pushOutput} (could not parse repo URL for fork fallback)` };
+    }
+
+    logger.sandbox.info('Push failed due to permissions, attempting fork fallback', {
+      sessionId: session.sandboxId,
+      owner: repoInfo.owner,
+      repo: repoInfo.repo,
+    });
+
+    try {
+      const forkInfo = await this.createOrGetFork(repoInfo.owner, repoInfo.repo);
+      await this.waitForForkReady(forkInfo.forkOwner, forkInfo.forkRepo);
+
+      const forkUrl = `https://${this.credentials.githubToken}@github.com/${forkInfo.forkOwner}/${forkInfo.forkRepo}.git`;
+
+      const addRemoteStream = await sandbox.execStream(
+        `cd ${session.workDir} && git remote add fork ${forkUrl} 2>/dev/null || git remote set-url fork ${forkUrl}`
+      );
+      for await (const event of parseSSEStream<ExecEvent>(addRemoteStream)) {
+        if (event.type === 'complete') break;
+      }
+
+      const forkPushStream = await sandbox.execStream(
+        `cd ${session.workDir} && git push fork HEAD:${branch}`
+      );
+
+      let forkPushOutput = '';
+      let forkPushExitCode = 0;
+      for await (const event of parseSSEStream<ExecEvent>(forkPushStream)) {
+        if (event.type === 'stdout' || event.type === 'stderr') {
+          forkPushOutput += event.data || '';
+        }
+        if (event.type === 'complete') {
+          forkPushExitCode = event.exitCode || 0;
+          break;
+        }
+      }
+
+      if (forkPushExitCode !== 0) {
+        return { success: false, error: `Fork push failed: ${forkPushOutput}` };
+      }
+
+      session.forkInfo = {
+        forkOwner: forkInfo.forkOwner,
+        forkRepo: forkInfo.forkRepo,
+        upstreamOwner: repoInfo.owner,
+        upstreamRepo: repoInfo.repo,
+      };
+      sessionCache.set(session.sandboxId, session);
+
+      logger.sandbox.info('Push succeeded via fork', {
+        sessionId: session.sandboxId,
+        forkOwner: forkInfo.forkOwner,
+        forkRepo: forkInfo.forkRepo,
+      });
+
+      return { success: true, usedFork: true };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { success: false, error: `${pushOutput} (fork fallback failed: ${errorMsg})` };
+    }
   }
 
   private async createPullRequest(args: {
@@ -515,12 +700,11 @@ echo "---CLAUDE_EXIT_CODE:$?---" >> /tmp/claude-output.txt
     }
 
     // Extract owner/repo from repoUrl
-    // Supports: https://github.com/owner/repo.git or https://github.com/owner/repo
-    const repoMatch = session.repoUrl.match(/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/);
-    if (!repoMatch) {
+    const repoInfo = this.parseGitHubUrl(session.repoUrl);
+    if (!repoInfo) {
       return this.errorContent(`Could not parse repository URL: ${session.repoUrl}`);
     }
-    const [, owner, repo] = repoMatch;
+    const { owner, repo } = repoInfo;
 
     const sandbox = getSandbox(this.sandboxBinding, session.sandboxId);
 
@@ -570,39 +754,31 @@ echo "---CLAUDE_EXIT_CODE:$?---" >> /tmp/claude-output.txt
       if (event.type === 'complete') break;
     }
 
-    // 3. Push to remote
-    const pushStream = await sandbox.execStream(
-      `cd ${session.workDir} && git push origin HEAD:${args.branch}`
+    const pushResult = await this.pushWithForkFallback(
+      session,
+      sandbox,
+      'origin',
+      args.branch
     );
-    let pushOutput = '';
-    let pushExitCode = 0;
-    for await (const event of parseSSEStream<ExecEvent>(pushStream)) {
-      if (event.type === 'stdout' || event.type === 'stderr') {
-        pushOutput += event.data || '';
-      }
-      if (event.type === 'complete') {
-        pushExitCode = event.exitCode || 0;
-        break;
-      }
-    }
-    if (pushExitCode !== 0) {
-      return this.errorContent(`Failed to push: ${pushOutput}`);
+
+    if (!pushResult.success) {
+      return this.errorContent(`Failed to push: ${pushResult.error}`);
     }
 
     // 4. Create PR via GitHub API
-    const prResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls`, {
+    // If we used a fork, create a cross-fork PR (head: "forkOwner:branch" on upstream repo)
+    const usedFork = pushResult.usedFork && session.forkInfo;
+    const prOwner = usedFork ? session.forkInfo!.upstreamOwner : owner;
+    const prRepo = usedFork ? session.forkInfo!.upstreamRepo : repo;
+    const prHead = usedFork ? `${session.forkInfo!.forkOwner}:${args.branch}` : args.branch;
+
+    const prResponse = await fetch(`https://api.github.com/repos/${prOwner}/${prRepo}/pulls`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.credentials.githubToken}`,
-        'Accept': 'application/vnd.github+json',
-        'Content-Type': 'application/json',
-        'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'Weft-Sandbox',
-      },
+      headers: this.githubHeaders,
       body: JSON.stringify({
         title: args.title,
         body: args.body,
-        head: args.branch,
+        head: prHead,
         base: args.base,
       }),
     });
@@ -615,19 +791,21 @@ echo "---CLAUDE_EXIT_CODE:$?---" >> /tmp/claude-output.txt
     const prData = await prResponse.json() as { number: number; html_url: string };
 
     logger.sandbox.info('Created pull request', {
-      owner,
-      repo,
+      owner: prOwner,
+      repo: prRepo,
       prNumber: prData.number,
       branch: args.branch,
+      usedFork: !!usedFork,
     });
 
     return {
-      content: [{ type: 'text', text: `Created PR #${prData.number}: ${prData.html_url}` }],
+      content: [{ type: 'text', text: `Created PR #${prData.number}: ${prData.html_url}${usedFork ? ' (from fork)' : ''}` }],
       structuredContent: {
         success: true,
         prNumber: prData.number,
         prUrl: prData.html_url,
         commitHash,
+        usedFork: !!usedFork,
         // Artifact fields for workflow result
         url: prData.html_url,
         title: `PR #${prData.number}: ${args.title}`,
