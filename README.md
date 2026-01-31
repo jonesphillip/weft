@@ -206,14 +206,13 @@ This separation means scheduled agents can analyze your inbox or repos overnight
 ## Adding Tools to Your Board
 
 <p align="center">
-  <img src="assets/board-settings.png" alt="Board Settings" width="400">
+  <img src="assets/board-settings.png" alt="Board Settings" width="600">
 </p>
 
-Each board has its own tool configuration in **Settings**:
+Each board has its own configuration in **Settings**, organized into tabs:
 
-- **Anthropic API Key** - Required for agents to execute. Each board uses its own key.
-- **Connected Accounts** - OAuth integrations like Google. Connect once to enable Gmail, Docs, and Sheets tools.
-- **MCP Servers** - Add GitHub (built-in) or any [remote MCP server](https://modelcontextprotocol.io/) to give agents custom tools.
+- **Credentials** - Add your Anthropic API key (required for agents) and connect OAuth accounts like Google and GitHub.
+- **Integrations** - Enable built-in tools (Gmail, Docs, Sheets, GitHub) or add any [remote MCP server](https://modelcontextprotocol.io/) for custom tools.
 
 ## Building New Integrations
 

@@ -1,11 +1,110 @@
-.settings-content {
+/* ============================================
+   Board Settings - Sidebar Layout
+   ============================================ */
+
+.settings-layout {
+  display: flex;
+  height: 100%;
+  min-height: 500px;
+}
+
+/* Sidebar Navigation */
+.settings-sidebar {
+  width: 200px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  justify-content: space-between;
+  padding: var(--space-3);
+  background: var(--color-bg-secondary);
+  border-right: 1px solid var(--color-border-default);
+}
+
+.settings-nav {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.settings-nav-danger {
+  border-top: 1px solid var(--color-border-default);
+  padding-top: var(--space-3);
+  margin-top: auto;
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: none;
+  border-radius: var(--border-radius);
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.settings-nav-item:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.settings-nav-item.active {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.settings-nav-item.danger {
+  color: var(--color-text-muted);
+}
+
+.settings-nav-item.danger:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.settings-nav-item.danger.active {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.settings-nav-icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.settings-nav-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.settings-nav-label {
+  flex: 1;
+}
+
+/* Content Area */
+.settings-content {
+  flex: 1;
+  padding: var(--space-5);
+  overflow-y: auto;
+  min-width: 0;
 }
 
 .settings-error {
   padding: var(--space-3);
+  margin-bottom: var(--space-4);
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: var(--border-radius);
@@ -13,45 +112,56 @@
   font-size: 13px;
 }
 
+/* Section Styles */
 .settings-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.settings-section:last-child {
+  margin-bottom: 0;
 }
 
 .settings-section-header {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+  margin-bottom: var(--space-4);
 }
 
 .settings-section-title {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--color-text-primary);
+  margin: 0 0 var(--space-1) 0;
+}
+
+.settings-section-description {
+  font-size: 13px;
+  color: var(--color-text-muted);
   margin: 0;
 }
 
-.settings-section-hint {
-  font-size: 12px;
-  color: var(--color-text-muted);
+.settings-section-divider {
+  height: 1px;
+  background: var(--color-border-default);
+  margin: var(--space-5) 0;
 }
 
+/* Loading State */
 .settings-loading {
-  padding: var(--space-3);
+  padding: var(--space-4);
   text-align: center;
   color: var(--color-text-muted);
   font-size: 13px;
 }
 
+/* Empty State */
 .settings-empty {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: var(--space-3);
-  padding: var(--space-3);
+  padding: var(--space-4);
   background: var(--color-bg-secondary);
   border-radius: var(--border-radius);
+  border: 1px dashed var(--color-border-default);
 }
 
 .settings-empty p {
@@ -60,46 +170,119 @@
   color: var(--color-text-muted);
 }
 
-.credentials-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.credential-item {
+/* Credential/Item Cards */
+.settings-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border-default);
   border-radius: var(--border-radius);
+  margin-bottom: var(--space-2);
 }
 
-.credential-info {
+.settings-card:last-child {
+  margin-bottom: 0;
+}
+
+.settings-card-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.settings-card-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--border-radius);
+}
+
+.settings-card-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.settings-card-icon.github {
+  color: var(--color-text-primary);
+}
+
+.settings-card-info {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
-.credential-name {
+.settings-card-name {
   font-size: 13px;
   font-weight: 500;
   color: var(--color-text-primary);
 }
 
-.credential-type {
-  font-size: 11px;
+.settings-card-meta {
+  font-size: 12px;
   color: var(--color-text-muted);
-  font-family: var(--font-mono);
 }
 
-.credential-delete {
+.settings-card-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Form Styles */
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius);
+}
+
+.settings-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+/* Text Button */
+.settings-text-btn {
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  border: none;
+  border-radius: var(--border-radius);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.settings-text-btn:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.settings-text-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+/* Delete Button */
+.settings-delete-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   background: transparent;
   border: none;
@@ -108,85 +291,305 @@
   font-size: 18px;
   cursor: pointer;
   transition: all var(--transition-fast);
+  flex-shrink: 0;
 }
 
-.credential-delete:hover {
+.settings-delete-btn:hover {
   background: rgba(239, 68, 68, 0.1);
   color: #ef4444;
 }
 
-.credential-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
+/* Danger Zone Card */
+.danger-card {
+  padding: var(--space-4);
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--border-radius);
 }
 
-.credential-replace {
-  padding: var(--space-1) var(--space-2);
-  background: transparent;
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--border-radius);
+.danger-card-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ef4444;
+  margin: 0 0 var(--space-2) 0;
+}
+
+.danger-card-description {
+  font-size: 13px;
   color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  cursor: pointer;
-  transition: all var(--transition-fast);
+  margin: 0 0 var(--space-4) 0;
 }
 
-.credential-replace:hover {
-  border-color: var(--color-border-focus);
-  color: var(--color-text-primary);
-}
-
-.api-key-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  background: var(--color-bg-secondary);
-  border-radius: var(--border-radius);
-}
-
-.api-key-form-actions {
+.danger-card-actions {
   display: flex;
   justify-content: flex-end;
-  gap: var(--space-2);
-  padding-top: var(--space-2);
-}
-
-.add-another-btn {
-  align-self: flex-start;
 }
 
 /* ============================================
    Mobile Styles
    ============================================ */
 @media (max-width: 767px) {
-  .settings-content {
-    gap: var(--space-4);
+  .settings-layout {
+    flex-direction: column;
+    min-height: auto;
   }
 
-  .credential-item {
-    flex-direction: column;
-    align-items: flex-start;
+  .settings-sidebar {
+    width: 100%;
+    flex-direction: row;
+    padding: var(--space-2);
+    border-right: none;
+    border-bottom: 1px solid var(--color-border-default);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .settings-nav {
+    flex-direction: row;
+    gap: var(--space-1);
+  }
+
+  .settings-nav-danger {
+    border-top: none;
+    border-left: 1px solid var(--color-border-default);
+    padding-top: 0;
+    padding-left: var(--space-2);
+    margin-top: 0;
+    margin-left: var(--space-2);
+  }
+
+  .settings-nav-item {
+    white-space: nowrap;
+    padding: var(--space-2);
+  }
+
+  .settings-nav-label {
+    display: none;
+  }
+
+  .settings-nav-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .settings-nav-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .settings-content {
+    padding: var(--space-4);
+  }
+
+  .settings-card {
     gap: var(--space-2);
   }
 
-  .credential-delete {
-    align-self: flex-end;
-    width: var(--touch-target-min);
-    height: var(--touch-target-min);
+  .settings-card-actions {
+    flex-shrink: 0;
   }
+}
 
-  .api-key-form-actions {
-    flex-direction: column;
-  }
+/* ============================================
+   General Section - Info Grid
+   ============================================ */
 
-  .api-key-form-actions > * {
-    width: 100%;
-  }
+.settings-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
 
-  .add-another-btn {
-    width: 100%;
-  }
+.settings-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius);
+}
+
+.settings-info-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.settings-info-value {
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.settings-info-mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.settings-info-secondary {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+/* ============================================
+   Danger Section - Confirm Dialog
+   ============================================ */
+
+.danger-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.danger-confirm-text {
+  font-size: 13px;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.danger-confirm-text strong {
+  color: #ef4444;
+}
+
+.danger-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* ============================================
+   Integrations Section
+   ============================================ */
+
+.integrations-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.integration-card .settings-card-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-card-account {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+/* Add Options */
+.add-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.add-option-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-border-default);
+  border-top-color: var(--color-accent-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Tools tooltip */
+.tools-more {
+  cursor: default;
+}
+
+.tools-more .tools-tooltip {
+  margin-top: -6px;
+  padding: 6px 10px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: var(--color-text-primary);
+  max-width: 250px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 9999;
+  pointer-events: none;
+}
+
+/* Clickable integration card (button element) */
+button.integration-card.clickable {
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: border-color var(--transition-fast);
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+button.integration-card.clickable:hover {
+  background-color: var(--color-bg-secondary);
+}
+
+.settings-card-chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+/* ============================================
+   Detail View (Drill-down Navigation)
+   ============================================ */
+
+.detail-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) 0;
+  margin-bottom: var(--space-3);
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.detail-back-btn:hover {
+  color: var(--color-text-primary);
+}
+
+.detail-back-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.detail-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+/* Add Integration card at bottom of list */
+.integration-add-card {
+  border-style: dashed;
+}
+
+.integration-add-icon {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--color-text-muted);
 }

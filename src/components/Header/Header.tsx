@@ -27,7 +27,6 @@ export function Header() {
 
   const isHome = location.pathname === '/';
 
-  // Auto-open settings modal when returning from GitHub OAuth
   useEffect(() => {
     const githubConnected = searchParams.get('github');
     const githubError = searchParams.get('github_error');
@@ -36,7 +35,6 @@ export function Header() {
     }
   }, [searchParams, activeBoard]);
 
-  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -79,6 +77,21 @@ export function Header() {
   const handleSelectBoard = (boardId: string) => {
     navigate(`/board/${boardId}`);
     setShowSelector(false);
+  };
+
+  const handleStopWorkflow = async (e: React.MouseEvent, workflowId: string) => {
+    e.stopPropagation();
+    if (confirmingCancel === workflowId && activeBoard) {
+      const result = await api.cancelWorkflow(activeBoard.id, workflowId);
+      if (result.success && result.data) {
+        updateWorkflowPlan(result.data);
+      } else {
+        removeWorkflowPlan(workflowId);
+      }
+      setConfirmingCancel(null);
+    } else {
+      setConfirmingCancel(workflowId);
+    }
   };
 
   return (
@@ -134,7 +147,6 @@ export function Header() {
       </div>
 
       <div className="header-right">
-        {/* Active Agents dropdown */}
         {!isHome && activeBoard && (
           <div className="executions-wrapper" ref={executionsRef}>
             <button
@@ -154,20 +166,17 @@ export function Header() {
                   <div className="executions-empty">No agents running</div>
                 ) : (
                   activeWorkflows.map((workflow) => {
-                    // Look up task title from active board
                     const task = activeBoard?.tasks?.find((t) => t.id === workflow.taskId);
                     const taskTitle = task?.title || `Task ${workflow.taskId.slice(0, 8)}`;
-
-                    // Get current step info
                     const currentStep = workflow.steps?.[workflow.currentStepIndex || 0];
-                    const stepName = currentStep?.name;
+                    const isCheckpoint = workflow.status === 'checkpoint';
+                    const isConfirming = confirmingCancel === workflow.id;
 
-                    // Build secondary text
                     let secondaryText = '';
-                    if (workflow.status === 'checkpoint') {
+                    if (isCheckpoint) {
                       secondaryText = 'Awaiting approval';
-                    } else if (workflow.status === 'executing' && stepName) {
-                      secondaryText = stepName;
+                    } else if (workflow.status === 'executing' && currentStep?.name) {
+                      secondaryText = currentStep.name;
                     } else if (workflow.status === 'planning') {
                       secondaryText = 'Starting...';
                     }
@@ -181,8 +190,8 @@ export function Header() {
                             window.dispatchEvent(new CustomEvent('open-task', { detail: { taskId: workflow.taskId } }));
                           }}
                         >
-                          <span className={`executions-item-status ${workflow.status === 'checkpoint' ? 'status-checkpoint' : ''}`}>
-                            {workflow.status === 'checkpoint' ? '⏸' : '●'}
+                          <span className={`executions-item-status ${isCheckpoint ? 'status-checkpoint' : ''}`}>
+                            {isCheckpoint ? '⏸' : '●'}
                           </span>
                           <div className="executions-item-info">
                             <span className="executions-item-title">{taskTitle}</span>
@@ -192,25 +201,11 @@ export function Header() {
                           </div>
                         </button>
                         <button
-                          className={`executions-item-stop ${confirmingCancel === workflow.id ? 'confirming' : ''}`}
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            if (confirmingCancel === workflow.id && activeBoard) {
-                              const result = await api.cancelWorkflow(activeBoard.id, workflow.id);
-                              if (result.success && result.data) {
-                                updateWorkflowPlan(result.data);
-                              } else {
-                                // Plan not found or already completed - just remove from UI
-                                removeWorkflowPlan(workflow.id);
-                              }
-                              setConfirmingCancel(null);
-                            } else {
-                              setConfirmingCancel(workflow.id);
-                            }
-                          }}
-                          title={confirmingCancel === workflow.id ? 'Click to confirm' : 'Stop this agent'}
+                          className={`executions-item-stop ${isConfirming ? 'confirming' : ''}`}
+                          onClick={(e) => handleStopWorkflow(e, workflow.id)}
+                          title={isConfirming ? 'Click to confirm' : 'Stop this agent'}
                         >
-                          {confirmingCancel === workflow.id ? 'Confirm' : 'Stop'}
+                          {isConfirming ? 'Confirm' : 'Stop'}
                         </button>
                       </div>
                     );
@@ -221,7 +216,6 @@ export function Header() {
           </div>
         )}
 
-        {/* Board Settings - separate from user menu since it's board-scoped */}
         {!isHome && activeBoard && (
           <button
             className="header-settings-btn"
@@ -232,7 +226,6 @@ export function Header() {
           </button>
         )}
 
-        {/* User menu */}
         {user && (
           <div className="user-menu-wrapper" ref={userMenuRef}>
             <button

@@ -517,24 +517,8 @@ export function TaskModal({ task, isOpen, onClose }: TaskModalProps) {
     );
   };
 
-  // Use full width for approval views with rich content (PR diffs, Google Docs, Sheets, Emails)
-  const FULL_WIDTH_TOOLS = [
-    'GitHub__createPullRequest',
-    'GitHub__create_pr',
-    'Sandbox__createPullRequest',
-    'Google_Docs__createDocument',
-    'Google_Docs__appendToDocument',
-    'Google_Docs__replaceDocumentContent',
-    'Google_Sheets__createSpreadsheet',
-    'Google_Sheets__appendRows',
-    'Google_Sheets__updateCells',
-    'Google_Sheets__replaceSheetContent',
-    'Gmail__sendEmail',
-    'Gmail__createDraft',
-  ];
-  const checkpointTool = (workflowPlan?.checkpointData as { tool?: string } | undefined)?.tool;
-  const needsFullWidth = currentView === 'checkpoint-review' &&
-    checkpointTool && FULL_WIDTH_TOOLS.includes(checkpointTool);
+  // Use full width for all approval/checkpoint views
+  const needsFullWidth = currentView === 'checkpoint-review' || currentView === 'plan-review';
   const modalWidth = needsFullWidth ? 'full' : 'lg';
 
   return (

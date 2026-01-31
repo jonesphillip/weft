@@ -1,65 +1,80 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Modal, Input, Button } from '../common';
-import { AccountsSection } from './AccountsSection';
-import { MCPSection } from './MCPSection';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Modal } from '../common';
+import { GeneralSection } from './sections/GeneralSection';
+import { CredentialsSection } from './sections/CredentialsSection';
+import { IntegrationsSection } from './sections/IntegrationsSection';
+import { DangerSection } from './sections/DangerSection';
 import { useBoard } from '../../context/BoardContext';
-import { CREDENTIAL_TYPES, type BoardCredential } from '../../types';
+import type { BoardCredential, MCPServer } from '../../types';
 import * as api from '../../api/client';
 import './BoardSettings.css';
+
+type SettingsTab = 'general' | 'credentials' | 'integrations' | 'danger';
+
+const GEAR_ICON = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </svg>
+);
+
+const LOCK_ICON = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </svg>
+);
+
+const INTEGRATIONS_ICON = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="4" y="4" width="16" height="16" rx="2" />
+    <circle cx="9" cy="9" r="1.5" fill="currentColor" />
+    <circle cx="15" cy="9" r="1.5" fill="currentColor" />
+    <path d="M9 15h6" />
+  </svg>
+);
+
+const WARNING_ICON = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12.01" y2="17" />
+  </svg>
+);
+
+const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
+  { id: 'general', label: 'General', icon: GEAR_ICON },
+  { id: 'credentials', label: 'Credentials', icon: LOCK_ICON },
+  { id: 'integrations', label: 'Integrations', icon: INTEGRATIONS_ICON },
+  { id: 'danger', label: 'Danger Zone', icon: WARNING_ICON },
+];
+
+const TAB_IDS = new Set<string>(TABS.map((t) => t.id));
+
+function isSettingsTab(value: string): value is SettingsTab {
+  return TAB_IDS.has(value);
+}
+
+const mainTabs = TABS.filter((t) => t.id !== 'danger');
+const dangerTab = TABS.find((t) => t.id === 'danger')!;
 
 interface BoardSettingsProps {
   isOpen: boolean;
   onClose: () => void;
+  initialTab?: string;
 }
 
-export function BoardSettings({ isOpen, onClose }: BoardSettingsProps) {
-  const { activeBoard } = useBoard();
+export function BoardSettings({ isOpen, onClose, initialTab }: BoardSettingsProps) {
+  const { activeBoard, renameBoard, deleteBoard } = useBoard();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [credentials, setCredentials] = useState<BoardCredential[]>([]);
+  const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
   const [loading, setLoading] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState('');
-  const [apiKeyName, setApiKeyName] = useState('');
-  const [showApiKeyForm, setShowApiKeyForm] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState<'github' | 'google' | null>(null);
-
-  // Check for OAuth success/error in URL params
-  useEffect(() => {
-    const githubConnected = searchParams.get('github');
-    const githubError = searchParams.get('github_error');
-    const googleConnected = searchParams.get('google');
-    const googleError = searchParams.get('google_error');
-
-    if (githubConnected === 'connected') {
-      if (activeBoard) {
-        loadCredentials();
-      }
-      searchParams.delete('github');
-      setSearchParams(searchParams, { replace: true });
-    }
-
-    if (githubError) {
-      setError(`GitHub connection failed: ${githubError}`);
-      searchParams.delete('github_error');
-      setSearchParams(searchParams, { replace: true });
-    }
-
-    if (googleConnected === 'connected') {
-      if (activeBoard) {
-        loadCredentials();
-      }
-      searchParams.delete('google');
-      setSearchParams(searchParams, { replace: true });
-    }
-
-    if (googleError) {
-      setError(`Google connection failed: ${googleError}`);
-      searchParams.delete('google_error');
-      setSearchParams(searchParams, { replace: true });
-    }
-  }, [searchParams, setSearchParams, activeBoard]);
 
   const loadCredentials = useCallback(async () => {
     if (!activeBoard) return;
@@ -74,45 +89,46 @@ export function BoardSettings({ isOpen, onClose }: BoardSettingsProps) {
     setLoading(false);
   }, [activeBoard]);
 
+  const loadMcpServers = useCallback(async () => {
+    if (!activeBoard) return;
+    const result = await api.getMCPServers(activeBoard.id);
+    if (result.success && result.data) {
+      setMcpServers(result.data);
+    }
+  }, [activeBoard]);
+
+  useEffect(() => {
+    const providers = [
+      { key: 'github', label: 'GitHub' },
+      { key: 'google', label: 'Google' },
+    ];
+
+    let changed = false;
+    for (const { key, label } of providers) {
+      if (searchParams.get(key) === 'connected') {
+        if (activeBoard) loadCredentials();
+        searchParams.delete(key);
+        changed = true;
+      }
+      const errorParam = searchParams.get(`${key}_error`);
+      if (errorParam) {
+        setError(`${label} connection failed: ${errorParam}`);
+        searchParams.delete(`${key}_error`);
+        changed = true;
+      }
+    }
+    if (changed) {
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams, activeBoard, loadCredentials]);
+
   useEffect(() => {
     if (isOpen && activeBoard) {
+      setActiveTab(initialTab && isSettingsTab(initialTab) ? initialTab : 'general');
       loadCredentials();
+      loadMcpServers();
     }
-  }, [isOpen, activeBoard, loadCredentials]);
-
-  const handleAddApiKey = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeBoard || !apiKeyInput.trim()) return;
-
-    setSaving(true);
-    setError(null);
-
-    // Delete any existing Anthropic API key first (replace behavior)
-    const existingKey = credentials.find(c => c.type === CREDENTIAL_TYPES.ANTHROPIC_API_KEY);
-    if (existingKey) {
-      await api.deleteCredential(activeBoard.id, existingKey.id);
-    }
-
-    const result = await api.createCredential(activeBoard.id, {
-      type: CREDENTIAL_TYPES.ANTHROPIC_API_KEY,
-      name: apiKeyName.trim() || 'Anthropic API Key',
-      value: apiKeyInput.trim(),
-    });
-
-    if (result.success && result.data) {
-      // Remove old key and add new one
-      setCredentials((prev) =>
-        prev.filter(c => c.type !== CREDENTIAL_TYPES.ANTHROPIC_API_KEY).concat(result.data!)
-      );
-      setApiKeyInput('');
-      setApiKeyName('');
-      setShowApiKeyForm(false);
-    } else {
-      setError(result.error?.message || 'Failed to save API key');
-    }
-
-    setSaving(false);
-  };
+  }, [isOpen, activeBoard, initialTab, loadCredentials, loadMcpServers]);
 
   const handleDeleteCredential = async (credentialId: string) => {
     if (!activeBoard) return;
@@ -142,139 +158,104 @@ export function BoardSettings({ isOpen, onClose }: BoardSettingsProps) {
     }
   };
 
-  const anthropicKeys = credentials.filter((c) => c.type === CREDENTIAL_TYPES.ANTHROPIC_API_KEY);
+  const handleCredentialAdded = (credential: BoardCredential) => {
+    setCredentials((prev) => {
+      const existing = prev.findIndex((c) => c.type === credential.type);
+      if (existing >= 0) {
+        const updated = [...prev];
+        updated[existing] = credential;
+        return updated;
+      }
+      return [...prev, credential];
+    });
+  };
+
+  const handleMcpServerAdded = (server: MCPServer) => {
+    setMcpServers((prev) => [...prev, server]);
+  };
+
+  const handleMcpServerDeleted = (serverId: string) => {
+    setMcpServers((prev) => prev.filter((s) => s.id !== serverId));
+  };
 
   if (!activeBoard) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Board Settings" width="lg">
-      <div className="settings-content">
-        {error && <div className="settings-error">{error}</div>}
+    <Modal isOpen={isOpen} onClose={onClose} title="Board Settings" width="settings">
+      <div className="settings-layout">
+        <nav className="settings-sidebar">
+          <ul className="settings-nav">
+            {mainTabs.map((tab) => (
+              <li key={tab.id}>
+                <button
+                  className={`settings-nav-item ${activeTab === tab.id ? 'active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  <span className="settings-nav-icon">{tab.icon}</span>
+                  <span className="settings-nav-label">{tab.label}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
 
-        {/* Anthropic API Key Section - Required for agent */}
-        <section className="settings-section">
-          <div className="settings-section-header">
-            <h3 className="settings-section-title">Anthropic API Key</h3>
-            <span className="settings-section-hint">Required for agent execution</span>
-          </div>
+          <ul className="settings-nav settings-nav-danger">
+            <li>
+              <button
+                className={`settings-nav-item danger ${activeTab === 'danger' ? 'active' : ''}`}
+                onClick={() => setActiveTab('danger')}
+              >
+                <span className="settings-nav-icon">{dangerTab.icon}</span>
+                <span className="settings-nav-label">{dangerTab.label}</span>
+              </button>
+            </li>
+          </ul>
+        </nav>
 
-          {loading ? (
-            <div className="settings-loading">Loading...</div>
-          ) : (
-            <>
-              {anthropicKeys.length > 0 && !showApiKeyForm ? (
-                <div className="credentials-list">
-                  {anthropicKeys.slice(0, 1).map((cred) => (
-                    <div key={cred.id} className="credential-item">
-                      <div className="credential-info">
-                        <span className="credential-name">{cred.name}</span>
-                        <span className="credential-type">sk-...****</span>
-                      </div>
-                      <div className="credential-actions">
-                        <button
-                          className="credential-replace"
-                          onClick={() => setShowApiKeyForm(true)}
-                          title="Replace API key"
-                        >
-                          Replace
-                        </button>
-                        <button
-                          className="credential-delete"
-                          onClick={() => handleDeleteCredential(cred.id)}
-                          title="Remove API key"
-                        >
-                          &times;
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : !showApiKeyForm ? (
-                <div className="settings-empty">
-                  <p>No API key configured</p>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setShowApiKeyForm(true)}
-                  >
-                    + Add API Key
-                  </Button>
-                </div>
-              ) : null}
+        <div className="settings-content">
+          {error && <div className="settings-error">{error}</div>}
 
-              {showApiKeyForm && (
-                <form className="api-key-form" onSubmit={handleAddApiKey}>
-                  <Input
-                    label="Name (optional)"
-                    placeholder="My API Key"
-                    value={apiKeyName}
-                    onChange={(e) => setApiKeyName(e.target.value)}
-                  />
-                  <Input
-                    label="API Key"
-                    type="password"
-                    placeholder="sk-ant-..."
-                    value={apiKeyInput}
-                    onChange={(e) => setApiKeyInput(e.target.value)}
-                    autoFocus
-                  />
-                  <div className="api-key-form-actions">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setShowApiKeyForm(false);
-                        setApiKeyInput('');
-                        setApiKeyName('');
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      size="sm"
-                      disabled={!apiKeyInput.trim() || saving}
-                    >
-                      {saving ? 'Saving...' : anthropicKeys.length > 0 ? 'Replace' : 'Save'}
-                    </Button>
-                  </div>
-                </form>
-              )}
-            </>
+          {activeTab === 'general' && (
+            <GeneralSection
+              board={activeBoard}
+              onRename={(name) => renameBoard(activeBoard.id, name)}
+            />
           )}
-        </section>
 
-        {/* Connected Accounts Section */}
-        <section className="settings-section">
-          <div className="settings-section-header">
-            <h3 className="settings-section-title">Connected Accounts</h3>
-            <span className="settings-section-hint">Authenticate with services that have multiple integrations</span>
-          </div>
+          {activeTab === 'credentials' && (
+            <CredentialsSection
+              boardId={activeBoard.id}
+              credentials={credentials}
+              loading={loading}
+              connecting={connecting}
+              onConnect={handleConnect}
+              onDeleteCredential={handleDeleteCredential}
+              onCredentialAdded={handleCredentialAdded}
+            />
+          )}
 
-          <AccountsSection
-            credentials={credentials}
-            onConnect={(accountId) => handleConnect(accountId as 'github' | 'google')}
-            onDisconnect={handleDeleteCredential}
-            connecting={connecting}
-          />
-        </section>
+          {activeTab === 'integrations' && (
+            <IntegrationsSection
+              boardId={activeBoard.id}
+              credentials={credentials}
+              mcpServers={mcpServers}
+              onMcpServerAdded={handleMcpServerAdded}
+              onMcpServerDeleted={handleMcpServerDeleted}
+              onConnectAccount={handleConnect}
+              connectingAccount={connecting}
+            />
+          )}
 
-        {/* MCP Servers Section */}
-        <section className="settings-section">
-          <div className="settings-section-header">
-            <h3 className="settings-section-title">MCP Servers</h3>
-            <span className="settings-section-hint">Tool providers for AI workflows</span>
-          </div>
-
-          <MCPSection
-            boardId={activeBoard.id}
-            credentials={credentials}
-            onConnectGitHub={() => handleConnect('github')}
-            connectingGitHub={connecting === 'github'}
-          />
-        </section>
+          {activeTab === 'danger' && (
+            <DangerSection
+              board={activeBoard}
+              onDelete={() => {
+                deleteBoard(activeBoard.id);
+                onClose();
+                navigate('/');
+              }}
+            />
+          )}
+        </div>
       </div>
     </Modal>
   );

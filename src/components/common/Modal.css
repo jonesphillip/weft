@@ -75,6 +75,12 @@
   height: calc(100vh - var(--space-8));
 }
 
+.modal-settings {
+  width: 100%;
+  max-width: 860px;
+  height: min(640px, calc(100vh - var(--space-8)));
+}
+
 .modal-header {
   display: flex;
   align-items: center;
@@ -180,8 +186,9 @@
   min-height: 0; /* Allow flex child to shrink */
 }
 
-/* Full modal content should not have its own scroll - let children handle it */
-.modal-full .modal-content {
+/* Full/settings modal content should not have its own scroll - let children handle it */
+.modal-full .modal-content,
+.modal-settings .modal-content {
   padding: 0;
   overflow: hidden;
 }

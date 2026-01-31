@@ -8,7 +8,7 @@ export interface ModalProps {
   title?: string;
   titleBadge?: ReactNode;
   children: ReactNode;
-  width?: 'sm' | 'md' | 'lg' | 'full';
+  width?: 'sm' | 'md' | 'lg' | 'full' | 'settings';
   showBackButton?: boolean;
   onBack?: () => void;
   /** Return true to prevent close and trigger wiggle animation */
