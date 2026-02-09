@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "weft-dev",
   "main": "worker/index.ts",
-  "compatibility_date": "2025-12-10",
+  "compatibility_date": "2026-01-12",
   "workers_dev": true,
   "preview_urls": false,
   "compatibility_flags": ["nodejs_compat_v2"],
