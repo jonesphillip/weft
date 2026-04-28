@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/jonesphillip-weft-badge.png)](https://mseep.ai/app/jonesphillip-weft)
+
 # Weft
 
 Task management, but AI agents do your tasks.
